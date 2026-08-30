@@ -1,0 +1,21 @@
+services:
+  app:
+    build: .
+    image: micromouse:dev
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      # Live-reload source during development; keep container-side artefacts out of the host.
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./runs:/app/runs
+      - ./checkpoints:/app/checkpoints
+    environment:
+      PYTHONPATH: /app/src
+      MICROMOUSE_RUNS_DIR: /app/runs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
