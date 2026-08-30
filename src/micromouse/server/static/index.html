@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Micromouse — bot arena</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f4f4f2;
+    --surface-1: #fcfcfb;
+    --surface-2: #ececea;
+    --border:    #d9d9d4;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #7a7975;
+    --floodfill: #2a78d6;
+    --dynaq:     #eb6834;
+    --ppo:       #1baf7a;
+    --wall:      #2f2e2b;
+    --goal:      #e9d9a8;
+    --grid:      #e4e4e0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-0: #121211;
+      --surface-1: #1a1a19;
+      --surface-2: #242422;
+      --border:    #35342f;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #8e8d84;
+      --floodfill: #3987e5;
+      --dynaq:     #d95926;
+      --ppo:       #199e70;
+      --wall:      #d8d7cf;
+      --goal:      #4a4023;
+      --grid:      #2a2a27;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface-0); color: var(--text-primary);
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    padding: 16px 22px; border-bottom: 1px solid var(--border);
+    background: var(--surface-1);
+  }
+  h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--text-muted); font-size: 13px; }
+  main {
+    display: grid; grid-template-columns: minmax(360px, 1.15fr) minmax(340px, 1fr);
+    gap: 18px; padding: 18px 22px; align-items: start; max-width: 1400px;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+  }
+  .card h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--text-secondary); margin: 0 0 12px;
+  }
+  canvas { width: 100%; height: auto; display: block; border-radius: 6px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  label { font-size: 12px; color: var(--text-secondary); display: flex; gap: 6px; align-items: center; }
+  select, input[type=number] {
+    font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary);
+  }
+  input[type=range] { accent-color: var(--floodfill); }
+  button {
+    font: inherit; font-size: 13px; font-weight: 500; padding: 6px 13px;
+    border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text-primary); cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--border); }
+  button.primary { background: var(--floodfill); border-color: var(--floodfill); color: #fff; }
+  button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 10px; }
+  .tile { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+  .tile .k { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .tile .v { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 3px; }
+  .tile .u { font-size: 12px; color: var(--text-muted); font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 500; }
+  th:first-child, td:first-child { text-align: left; }
+  .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 7px; vertical-align: baseline; }
+  .bar-row { display: grid; grid-template-columns: 88px 1fr 62px; gap: 10px; align-items: center; margin-bottom: 8px; }
+  .bar-track { background: var(--surface-2); border-radius: 4px; height: 20px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 0 4px 4px 0; transition: width .35s ease; }
+  .bar-label { font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-val { font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; color: var(--text-secondary); }
+  .status { font-size: 12px; color: var(--text-muted); min-height: 18px; margin-top: 10px; }
+  .desc { font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.45; }
+  .scrub { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .scrub input[type=range] { flex: 1; }
+  .clock { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-secondary); min-width: 96px; text-align: right; }
+  .stack { display: flex; flex-direction: column; gap: 18px; }
+  td.best { font-weight: 650; }
+  td.miss { color: var(--text-muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Micromouse arena</h1>
+  <span class="sub">16&times;16 contest maze &middot; classical vs tabular RL vs deep RL</span>
+</header>
+
+<main>
+  <div class="stack">
+    <section class="card">
+      <h2>Maze &amp; replay</h2>
+      <div class="controls">
+        <label>Bot
+          <select id="bot"></select>
+        </label>
+        <label>Maze seed
+          <input type="number" id="seed" value="3" min="0" max="9999" style="width:72px">
+        </label>
+        <button class="primary" id="run">Run</button>
+        <button id="newMaze">New maze</button>
+      </div>
+      <canvas id="maze" width="720" height="720"></canvas>
+      <div class="scrub">
+        <button id="play">Pause</button>
+        <input type="range" id="scrub" min="0" max="0" value="0">
+        <span class="clock" id="clock">0.00 s</span>
+      </div>
+      <div class="controls" style="margin-top:10px">
+        <label>Speed
+          <select id="speed">
+            <option value="0.5">0.5&times;</option>
+            <option value="1">1&times;</option>
+            <option value="4" selected>4&times;</option>
+            <option value="16">16&times;</option>
+            <option value="64">64&times;</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="showOptimal" checked> Optimal route</label>
+        <label><input type="checkbox" id="showVisited" checked> Cells explored</label>
+      </div>
+      <div class="status" id="runStatus"></div>
+    </section>
+
+    <section class="card">
+      <h2>This attempt</h2>
+      <div class="tiles" id="tiles"></div>
+      <div class="desc" id="botDesc"></div>
+    </section>
+  </div>
+
+  <div class="stack">
+    <section class="card">
+      <h2>Race</h2>
+      <div class="controls">
+        <label>Mazes
+          <input type="number" id="mazes" value="8" min="1" max="50" style="width:64px">
+        </label>
+        <button class="primary" id="race">Race all bots</button>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div id="chart"></div>
+      <div class="status" id="raceStatus">Handicapped score = best run + maze time / 30. Lower is better.</div>
+    </section>
+
+    <section class="card">
+      <h2>Per-maze scores</h2>
+      <table id="perMaze">
+        <thead><tr><th>Maze</th></tr></thead>
+        <tbody><tr><td style="color:var(--text-muted);text-align:left">Run a race to populate.</td></tr></tbody>
+      </table>
+      <div class="status">Best score on each maze is highlighted. &infin; means the mouse never reached the centre.</div>
+    </section>
+
+    <section class="card">
+      <h2>Leaderboard</h2>
+      <table id="board">
+        <thead>
+          <tr>
+            <th>Bot</th><th>Score</th><th>Solved</th><th>Wins</th>
+            <th>Best run</th><th>Search</th><th>Explored</th>
+          </tr>
+        </thead>
+        <tbody><tr><td colspan="7" style="color:var(--text-muted);text-align:left">Run a race to populate.</td></tr></tbody>
+      </table>
+    </section>
+  </div>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
